@@ -1,455 +1,304 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Advanced ClamAV Scanner</title>
-
-    <!-- Bootstrap CDN -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/css/bootstrap.min.css" rel="stylesheet">
-
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <title>ClamAV Scanner</title>
+    
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
         body {
-            font-family: Arial, sans-serif;
-            background: linear-gradient(135deg, #020617, #0f172a);
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             min-height: 100vh;
-            color: white;
-            padding: 30px;
         }
-
-        .container {
-            max-width: 1250px;
-            margin: auto;
+        
+        .main-container {
+            max-width: 1200px;
+            margin: 30px auto;
+            padding: 0 20px;
         }
-
-        h1 {
-            text-align: center;
-            margin-bottom: 35px;
-            color: #38bdf8;
-            font-size: 42px;
-        }
-
-        .stats {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 20px;
-            margin-bottom: 35px;
-        }
-
+        
         .card {
-            background: rgba(255, 255, 255, 0.05);
-            backdrop-filter: blur(12px);
-            padding: 30px;
-            border-radius: 18px;
-            border: 1px solid rgba(255, 255, 255, 0.1);
+            border: none;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            margin-bottom: 25px;
+        }
+        
+        .stat-card {
             text-align: center;
-            transition: 0.3s ease;
-            box-shadow: 0 0 20px rgba(0, 0, 0, 0.3);
-            color: white;
+            padding: 25px;
+            background: white;
+            border-radius: 15px;
+            transition: transform 0.3s;
         }
-
-        .card:hover {
-            transform: translateY(-6px);
-            border-color: rgba(56, 189, 248, 0.5);
+        
+        .stat-card:hover {
+            transform: translateY(-5px);
         }
-
-        .card h2 {
-            font-size: 42px;
-            margin-bottom: 10px;
-            color: #4ade80;
+        
+        .stat-number {
+            font-size: 2.5rem;
+            font-weight: bold;
+            margin-bottom: 5px;
         }
-
-        .card p {
-            color: #cbd5e1;
-            font-size: 16px;
-        }
-
-        .upload-box {
-            background: rgba(255, 255, 255, 0.05);
+        
+        .upload-area {
+            background: #f8f9fa;
+            border: 2px dashed #dee2e6;
+            border-radius: 15px;
             padding: 40px;
-            border-radius: 22px;
-            margin-bottom: 35px;
-            border: 2px dashed #38bdf8;
             text-align: center;
-            backdrop-filter: blur(12px);
-        }
-
-        .upload-box h2 {
-            margin-bottom: 20px;
-            font-size: 32px;
-            color: #f8fafc;
-        }
-
-        input[type=file] {
-            width: 100%;
-            padding: 16px;
-            background: #0f172a;
-            border: 1px solid #334155;
-            color: white;
-            border-radius: 12px;
-            margin-top: 20px;
-            font-size: 15px;
-        }
-
-        button {
-            margin-top: 25px;
-            width: 100%;
-            padding: 16px;
-            border: none;
-            border-radius: 14px;
-            background: linear-gradient(90deg, #22c55e, #16a34a);
-            color: white;
-            font-size: 18px;
-            font-weight: bold;
             cursor: pointer;
-            transition: 0.3s ease;
+            transition: all 0.3s;
         }
-
-        button:hover {
-            transform: scale(1.01);
-            opacity: 0.95;
+        
+        .upload-area:hover {
+            border-color: #667eea;
+            background: #f0f0ff;
         }
-
-        .success {
-            background: rgba(34, 197, 94, 0.15);
-            padding: 16px;
-            border-radius: 12px;
-            margin-bottom: 20px;
-            color: #4ade80;
-            border: 1px solid rgba(34, 197, 94, 0.3);
-        }
-
-        .error {
-            background: rgba(239, 68, 68, 0.15);
-            padding: 16px;
-            border-radius: 12px;
-            margin-bottom: 20px;
-            color: #f87171;
-            border: 1px solid rgba(239, 68, 68, 0.3);
-        }
-
-        .table-wrapper {
-            overflow-x: auto;
-            border-radius: 18px;
-        }
-
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            overflow: hidden;
-            border-radius: 18px;
-        }
-
-        table th {
-            background: #1e293b;
-            padding: 18px;
-            font-size: 15px;
-            white-space: nowrap;
-            color: #f8fafc;
-        }
-
-        table td {
-            background: rgba(255, 255, 255, 0.04);
-            padding: 18px;
-            text-align: center;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-            word-break: break-word;
-            max-width: 250px;
-            color: white;
-        }
-
-        table tr {
-            transition: 0.3s;
-        }
-
-        table tr:hover td {
-            background: rgba(56, 189, 248, 0.08);
-        }
-
-        .filename {
-            max-width: 260px;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-            display: block;
-            margin: auto;
-        }
-
+        
         .badge-clean {
-            background: rgba(34, 197, 94, 0.2);
-            color: #4ade80;
-            padding: 8px 16px;
-            border-radius: 25px;
-            font-weight: bold;
-            display: inline-block;
+            background: #d4edda;
+            color: #155724;
+            padding: 5px 12px;
+            border-radius: 20px;
         }
-
-        .badge-danger {
-            background: rgba(239, 68, 68, 0.2);
-            color: #f87171;
-            padding: 8px 16px;
-            border-radius: 25px;
-            font-weight: bold;
-            display: inline-block;
+        
+        .badge-infected {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 5px 12px;
+            border-radius: 20px;
         }
-
-        /* Bootstrap Pagination Custom */
-
-        .pagination .page-link {
-            background: rgba(255,255,255,0.06);
-            border: 1px solid rgba(255,255,255,0.08);
-            color: white;
-            border-radius: 10px;
-            margin: 0 4px;
+        
+        .table-container {
+            background: white;
+            border-radius: 15px;
+            overflow: hidden;
         }
-
-        .pagination .page-link:hover {
-            background: rgba(56,189,248,0.2);
-            border-color: #38bdf8;
-            color: white;
+        
+        .table thead th {
+            background: #f8f9fa;
+            border-bottom: 2px solid #dee2e6;
         }
-
-        .pagination .active .page-link {
-            background: linear-gradient(135deg, #38bdf8, #0ea5e9);
-            border: none;
-            color: white;
-        }
-
-        .pagination .disabled .page-link {
-            background: rgba(255,255,255,0.03);
-            color: #94a3b8;
-        }
-
-        .footer {
-            margin-top: 40px;
-            text-align: center;
-            color: #94a3b8;
-            font-size: 14px;
-        }
-
+        
         .loader {
             display: none;
-            margin-top: 25px;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.7);
+            z-index: 9999;
+            justify-content: center;
+            align-items: center;
         }
-
-        .spinner {
-            border: 5px solid rgba(255, 255, 255, 0.1);
-            border-top: 5px solid #38bdf8;
-            border-radius: 50%;
-            width: 65px;
-            height: 65px;
-            animation: spin 1s linear infinite;
-            margin: auto;
+        
+        .loader-content {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            text-align: center;
         }
-
-        @keyframes spin {
-            100% {
-                transform: rotate(360deg);
-            }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            padding: 12px 30px;
         }
-
-        @media(max-width:768px) {
-
-            body {
-                padding: 15px;
-            }
-
-            h1 {
-                font-size: 32px;
-            }
-
-            .upload-box {
-                padding: 25px;
-            }
-
-            table th,
-            table td {
-                padding: 14px;
-                font-size: 13px;
-            }
-
-            .card h2 {
-                font-size: 34px;
-            }
+        
+        .btn-primary:hover {
+            transform: scale(1.05);
         }
-
     </style>
 </head>
-
 <body>
 
-<div class="container">
-
-    <h1>🛡️ Advanced ClamAV Scanner</h1>
-
-    <div class="stats">
-
-        <div class="card">
-            <h2>{{ $totalScans }}</h2>
-            <p>Total Scans</p>
-        </div>
-
-        <div class="card">
-            <h2>{{ $cleanFiles }}</h2>
-            <p>Clean Files</p>
-        </div>
-
-        <div class="card">
-            <h2>{{ $infectedFiles }}</h2>
-            <p>Infected Files</p>
-        </div>
-
+<div class="main-container">
+    
+    <!-- Header -->
+    <div class="text-center mb-4">
+        <h1 style="color: white;">
+            <i class="fas fa-shield-alt"></i> ClamAV Virus Scanner
+        </h1>
+        <p style="color: white;">Upload and scan files for viruses</p>
     </div>
-
+    
+    <!-- Alert Messages -->
     @if(session('success'))
-        <div class="success">
-            {{ session('success') }}
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+            <i class="fas fa-check-circle"></i> {{ session('success') }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
         </div>
     @endif
-
+    
+    
     @if(session('error'))
-        <div class="error">
-            {{ session('error') }}
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            <i class="fas fa-exclamation-triangle"></i> {{ session('error') }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
         </div>
     @endif
+    
+   
+    
 
-    @if($errors->any())
-        @foreach($errors->all() as $error)
-            <div class="error">
-                {{ $error }}
-            </div>
-        @endforeach
-    @endif
-
-    <div class="upload-box">
-
-        <h2>Upload & Scan File</h2>
-
-        <form action="{{ route('file.upload') }}"
-              method="POST"
-              enctype="multipart/form-data"
-              id="scanForm">
-
-            @csrf
-
-            <input type="file" name="file" required>
-
-            <button type="submit">
-                Upload & Scan
-            </button>
-
-            <div class="loader" id="loader">
-                <div class="spinner"></div>
-                <p style="margin-top:15px;">Scanning File...</p>
-            </div>
-
-        </form>
-
+    
+    <!-- Upload Section -->
+    <div class="card">
+        <div class="card-body">
+            <h5 class="card-title mb-3">
+                <i class="fas fa-upload text-primary"></i> Upload & Scan File
+            </h5>
+            
+            <form action="{{ route('file.upload') }}" method="POST" enctype="multipart/form-data" id="scanForm">
+                @csrf
+                
+                <div class="upload-area" id="uploadArea">
+                    <i class="fas fa-cloud-upload-alt fa-4x text-muted mb-3"></i>
+                    <p class="text-muted mb-2">Click or drag file to upload</p>
+                    <input type="file" name="file" id="fileInput" class="d-none" required>
+                    <button type="button" class="btn btn-outline-primary" onclick="document.getElementById('fileInput').click()">
+                        <i class="fas fa-folder-open"></i> Browse Files
+                    </button>
+                    <div id="selectedFile" class="mt-3 small text-muted"></div>
+                </div>
+                
+                <div class="mt-4 text-center">
+                    <button type="submit" class="btn btn-primary btn-lg" id="submitBtn">
+                        <i class="fas fa-shield-alt"></i> Scan Now
+                    </button>
+                </div>
+            </form>
+        </div>
     </div>
-
-    <div class="table-wrapper">
-
-        <table>
-
+    
+    <!-- Search and Filter -->
+    <div class="card">
+        <div class="card-body">
+            <form method="GET" action="{{ url('/') }}" class="row g-3">
+                <div class="col-md-6">
+                    <input type="text" name="search" class="form-control" placeholder="Search by filename..." value="{{ request('search') }}">
+                </div>
+                <div class="col-md-4">
+                    <select name="status" class="form-select">
+                        <option value="">All Status</option>
+                        <option value="Clean" {{ request('status') == 'Clean' ? 'selected' : '' }}>Clean</option>
+                        <option value="Infected" {{ request('status') == 'Infected' ? 'selected' : '' }}>Infected</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="fas fa-search"></i> Filter
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- History Table -->
+    <div class="table-container">
+        <table class="table table-hover mb-0">
             <thead>
-            <tr>
-                <th>ID</th>
-                <th>Original Name</th>
-                <th>Type</th>
-                <th>Size</th>
-                <th>Status</th>
-                <th>Scanned At</th>
-            </tr>
-            </thead>
-
-            <tbody>
-
-            @forelse($histories as $history)
-
                 <tr>
-
+                    <th>ID</th>
+                    <th>Filename</th>
+                    <th>Type</th>
+                    <th>Size</th>
+                    <th>Status</th>
+                    <th>Scanned At</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                @forelse($histories as $history)
+                <tr>
                     <td>{{ $history->id }}</td>
-
-                    <td>
-                        <span class="filename"
-                              title="{{ $history->original_name }}">
-                            {{ \Illuminate\Support\Str::limit($history->original_name, 45) }}
-                        </span>
-                    </td>
-
-                    <td>{{ strtoupper($history->file_type) }}</td>
-
+                    <td>{{ Str::limit($history->original_name, 40) }}</td>
+                    <td>{{ $history->file_type }}</td>
                     <td>{{ $history->file_size }}</td>
-
                     <td>
                         @if($history->scan_status == 'Clean')
-
-                            <span class="badge-clean">
-                                ✅ Clean
-                            </span>
-
+                            <span class="badge-clean">✅ Clean</span>
                         @else
-
-                            <span class="badge-danger">
-                                ❌ Infected
-                            </span>
-
+                            <span class="badge-infected">❌ Infected</span>
                         @endif
                     </td>
-
+                    <td>{{ $history->created_at->format('d M Y H:i') }}</td>
                     <td>
-                        {{ $history->created_at->format('d M Y h:i A') }}
+                        <form action="{{ route('delete.history', $history->id) }}" method="POST" onsubmit="return confirm('Delete this record?')">
+                            @csrf
+                            @method('DELETE')
+                            <button type="submit" class="btn btn-sm btn-danger">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </form>
                     </td>
-
                 </tr>
-
-            @empty
-
+                @empty
                 <tr>
-                    <td colspan="6">
-                        No Scan History Found
+                    <td colspan="7" class="text-center py-4">
+                        <i class="fas fa-inbox fa-2x text-muted mb-2 d-block"></i>
+                        No scan history found
                     </td>
                 </tr>
-
-            @endforelse
-
+                @endforelse
             </tbody>
-
         </table>
-
     </div>
-
-    <!-- Bootstrap Pagination -->
-
-    <div class="d-flex justify-content-center mt-4">
-        {{ $histories->links('pagination::bootstrap-5') }}
+    
+    <!-- Pagination -->
+    <div class="mt-3">
+        {{ $histories->appends(request()->query())->links() }}
     </div>
-
-    <div class="footer">
-        Laravel 10 • ClamAV Security Scanner
-    </div>
-
 </div>
 
+<!-- Loader -->
+<div class="loader" id="loader">
+    <div class="loader-content">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+        <p class="mt-2 mb-0">Scanning file...</p>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
 <script>
-
+    const fileInput = document.getElementById('fileInput');
+    const selectedFileDiv = document.getElementById('selectedFile');
+    const uploadArea = document.getElementById('uploadArea');
     const form = document.getElementById('scanForm');
-
-    form.addEventListener('submit', function () {
-
-        document.getElementById('loader').style.display = 'block';
-
+    const loader = document.getElementById('loader');
+    
+    fileInput.addEventListener('change', function() {
+        if (this.files.length > 0) {
+            const file = this.files[0];
+            const fileSize = (file.size / 1024).toFixed(2);
+            selectedFileDiv.innerHTML = `<i class="fas fa-file"></i> Selected: ${file.name} (${fileSize} KB)`;
+            selectedFileDiv.style.color = '#667eea';
+        }
     });
-
+    
+    uploadArea.addEventListener('click', function() {
+        fileInput.click();
+    });
+    
+    form.addEventListener('submit', function() {
+        if (fileInput.files.length === 0) {
+            alert('Please select a file');
+            return false;
+        }
+        loader.style.display = 'flex';
+    });
 </script>
 
 </body>
-
 </html>
