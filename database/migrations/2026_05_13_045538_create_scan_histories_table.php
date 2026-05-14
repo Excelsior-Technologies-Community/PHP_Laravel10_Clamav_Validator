@@ -21,7 +21,7 @@ return new class extends Migration
                 'Clean',
                 'Infected'
             ]);
-
+            $table->string('virus_name')->nullable();
             $table->text('scan_output')->nullable();
 
             $table->timestamps();
