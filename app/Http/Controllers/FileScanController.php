@@ -5,140 +5,158 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use App\Models\ScanHistory;
+use App\Models\Quarantine;
+use App\Jobs\ScanFileJob;
+use Illuminate\Support\Facades\Log;
 
 class FileScanController extends Controller
 {
     public function index(Request $request)
     {
         $query = ScanHistory::query();
-        
-        // Search functionality
+
         if ($request->has('search') && !empty($request->search)) {
             $query->where('original_name', 'like', '%' . $request->search . '%');
         }
-        
-        // Filter by status
+
         if ($request->has('status') && !empty($request->status)) {
             $query->where('scan_status', $request->status);
         }
-        
+
         $histories = $query->orderBy('id', 'desc')->paginate(10);
-        
-        $totalScans = ScanHistory::count();
-        $cleanFiles = ScanHistory::where('scan_status', 'Clean')->count();
-        $infectedFiles = ScanHistory::where('scan_status', 'Infected')->count();
-        
-        return view('upload', compact(
-            'histories',
-            'totalScans',
-            'cleanFiles',
-            'infectedFiles'
-        ));
+
+        $stats = [
+            'total' => ScanHistory::count(),
+            'clean' => ScanHistory::where('scan_status', 'Clean')->count(),
+            'infected' => ScanHistory::where('scan_status', 'Infected')->count(),
+            'quarantined' => ScanHistory::where('is_quarantined', true)->count(),
+            'pending' => ScanHistory::where('scan_status', 'Pending')->count(),
+        ];
+
+        return view('upload', compact('histories', 'stats'));
     }
 
     public function scan(Request $request)
     {
         try {
-            // Validate file
             $request->validate([
-                'file' => 'required|file|max:10240' // 10MB max
+                'file' => 'required|file|max:1048576'
             ]);
 
-            if (!$request->hasFile('file')) {
-                return back()->with('error', 'No file was uploaded');
-            }
-
             $file = $request->file('file');
-            
-            if (!$file->isValid()) {
-                return back()->with('error', 'File upload failed');
-            }
-            
-            // Get ALL file details BEFORE moving the file
             $originalName = $file->getClientOriginalName();
             $extension = $file->getClientOriginalExtension();
-            $fileSize = $file->getSize(); // Get size BEFORE moving
-            $mimeType = $file->getMimeType();
-            
-            // Generate unique filename
+            $fileSize = $file->getSize();
+
             $uniqueName = time() . '_' . rand(1000, 9999) . '.' . $extension;
-            
-            // Create uploads directory if it doesn't exist
             $uploadPath = storage_path('app/uploads');
+
             if (!file_exists($uploadPath)) {
                 mkdir($uploadPath, 0777, true);
             }
-            
-            // Move the file
+
             $file->move($uploadPath, $uniqueName);
-            
-            // Check if file was moved successfully
-            $fullPath = $uploadPath . DIRECTORY_SEPARATOR . $uniqueName;
-            if (!file_exists($fullPath)) {
-                return back()->with('error', 'Failed to save file');
-            }
-            
-            // Calculate file size in KB (using the size we saved earlier)
-            $fileSizeKB = round($fileSize / 1024, 2);
-            
-            // Simple scan simulation (always returns clean)
-            $status = 'Clean';
-            $virusName = null;
-            
-            // Create scan record
-            ScanHistory::create([
+
+            $history = ScanHistory::create([
                 'file_name' => $uniqueName,
                 'original_name' => $originalName,
                 'file_type' => strtoupper($extension ?: 'UNKNOWN'),
-                'file_size' => $fileSizeKB . ' KB',
-                'scan_status' => $status,
-                'scan_output' => 'File scanned successfully - No threats detected',
-                'virus_name' => $virusName,
+                'file_size' => round($fileSize / 1024, 2) . ' KB',
+                'scan_status' => 'Pending',
+                'scan_output' => 'Queued for scanning...',
+                'virus_name' => null,
+                'is_quarantined' => false,
             ]);
-            
-            return redirect('/')->with('success', '✅ File "' . $originalName . '" uploaded and scanned successfully! File is clean.');
-            
+
+            ScanFileJob::dispatch($history);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'File uploaded and queued for scanning',
+                'scan_id' => $history->id
+            ]);
+
         } catch (\Exception $e) {
-            return back()->with('error', 'Error: ' . $e->getMessage());
+            Log::error('Upload error: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error: ' . $e->getMessage()
+            ], 500);
         }
     }
-    
-    // Delete scan history record
+
+    public function scanStatus($id)
+    {
+        $history = ScanHistory::findOrFail($id);
+        return response()->json([
+            'id' => $history->id,
+            'status' => $history->scan_status,
+            'virus_name' => $history->virus_name,
+            'is_quarantined' => $history->is_quarantined,
+        ]);
+    }
+
+    public function quarantineList()
+    {
+        $quarantined = ScanHistory::where('is_quarantined', true)->get();
+        return view('quarantine', compact('quarantined'));
+    }
+
+    public function restoreQuarantine($id)
+    {
+        $history = ScanHistory::findOrFail($id);
+        $filePath = storage_path('app/quarantine/' . $history->file_name);
+
+        if (file_exists($filePath)) {
+            $restorePath = storage_path('app/uploads/' . $history->file_name);
+            rename($filePath, $restorePath);
+            $history->update(['is_quarantined' => false]);
+        }
+
+        return back()->with('success', 'File restored from quarantine');
+    }
+
+    public function deleteQuarantine($id)
+    {
+        $history = ScanHistory::findOrFail($id);
+        $filePath = storage_path('app/quarantine/' . $history->file_name);
+
+        if (file_exists($filePath)) {
+            unlink($filePath);
+        }
+
+        $history->delete();
+        return back()->with('success', 'Quarantined file deleted');
+    }
+
     public function deleteHistory($id)
     {
         try {
             $history = ScanHistory::findOrFail($id);
-            
-            // Delete physical file if exists
             $filePath = storage_path('app/uploads/' . $history->file_name);
+
             if (file_exists($filePath)) {
                 unlink($filePath);
             }
-            
+
             $history->delete();
-            
             return back()->with('success', 'Record deleted successfully.');
         } catch (\Exception $e) {
             return back()->with('error', 'Failed to delete record');
         }
     }
-    
-    // Export scan results
+
     public function export()
     {
         $histories = ScanHistory::all();
-        
         $filename = 'scan_report_' . date('Y-m-d_H-i-s') . '.csv';
-        
+
         header('Content-Type: text/csv');
         header('Content-Disposition: attachment; filename="' . $filename . '"');
-        
+
         $handle = fopen('php://output', 'w');
-        
-        // Add headers
-        fputcsv($handle, ['ID', 'Original Name', 'File Type', 'File Size', 'Scan Status', 'Virus Name', 'Scanned At']);
-        
-        // Add data
+        fputcsv($handle, ['ID', 'Original Name', 'File Type', 'File Size', 'Scan Status', 'Virus Name', 'Quarantined', 'Scanned At']);
+
         foreach ($histories as $history) {
             fputcsv($handle, [
                 $history->id,
@@ -147,10 +165,11 @@ class FileScanController extends Controller
                 $history->file_size,
                 $history->scan_status,
                 $history->virus_name ?? 'N/A',
+                $history->is_quarantined ? 'Yes' : 'No',
                 $history->created_at->format('Y-m-d H:i:s')
             ]);
         }
-        
+
         fclose($handle);
         exit;
     }
